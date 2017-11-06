@@ -42,6 +42,13 @@ static void tx_cb_USART_CTRL(const struct usart_async_descriptor *const io_descr
 }
 
 /**
+ * \brief Callback for received characters.
+ * We do nothing here, but if we don't set it up, the low-level receive character
+ * function won't be called either. This is of course undocumented behavior.
+ */
+static void rx_cb_USART_CTRL(const struct usart_async_descriptor *const io_descr) {}
+
+/**
  * \brief USART initialization function
  *
  * Enables USART peripheral, clocks and initializes USART driver
@@ -62,8 +69,8 @@ static void USART_CTRL_write(const uint8_t *text, int count) {
 void uart_init(void) {
 	USART_CTRL_init();
 	usart_async_register_callback(&USART_CTRL, USART_ASYNC_TXC_CB, tx_cb_USART_CTRL);
-	/*usart_async_register_callback(&USART_CTRL, USART_ASYNC_RXC_CB, rx_cb);
-	usart_async_register_callback(&USART_CTRL, USART_ASYNC_ERROR_CB, err_cb);*/
+	usart_async_register_callback(&USART_CTRL, USART_ASYNC_RXC_CB, rx_cb_USART_CTRL);
+	usart_async_register_callback(&USART_CTRL, USART_ASYNC_ERROR_CB, 0);
 	usart_async_get_io_descriptor(&USART_CTRL, &USART_CTRL_io);
 	usart_async_enable(&USART_CTRL);
   nc_tx = 0;
