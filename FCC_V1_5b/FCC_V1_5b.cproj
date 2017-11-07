@@ -383,6 +383,12 @@
     <Compile Include="atmel_start_pins.h">
       <SubType>compile</SubType>
     </Compile>
+    <Compile Include="commands.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="commands.h">
+      <SubType>compile</SubType>
+    </Compile>
     <Compile Include="Config\hpl_dmac_config.h">
       <SubType>compile</SubType>
     </Compile>
@@ -738,6 +744,12 @@
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="main.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="spi.c">
+      <SubType>compile</SubType>
+    </Compile>
+    <Compile Include="spi.h">
       <SubType>compile</SubType>
     </Compile>
     <Compile Include="subbus.c">

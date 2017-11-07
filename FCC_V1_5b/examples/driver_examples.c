@@ -11,32 +11,6 @@
 #include "utils.h"
 
 /**
- * Example of using SPI_ADC to write "Hello World" using the IO abstraction.
- *
- * Since the driver is asynchronous we need to use statically allocated memory for string
- * because driver initiates transfer and then returns before the transmission is completed.
- *
- * Once transfer has been completed the tx_cb function will be called.
- */
-
-static uint8_t example_SPI_ADC[12] = "Hello World!";
-
-static void complete_cb_SPI_ADC(const struct spi_m_async_descriptor *const io_descr)
-{
-	/* Transfer completed */
-}
-
-void SPI_ADC_example(void)
-{
-	struct io_descriptor *io;
-	spi_m_async_get_io_descriptor(&SPI_ADC, &io);
-
-	spi_m_async_register_callback(&SPI_ADC, SPI_M_ASYNC_CB_XFER, (FUNC_PTR)complete_cb_SPI_ADC);
-	spi_m_async_enable(&SPI_ADC);
-	io_write(io, example_SPI_ADC, 12);
-}
-
-/**
  * Example of using USART_CTRL to write "Hello World" using the IO abstraction.
  *
  * Since the driver is asynchronous we need to use statically allocated memory for string

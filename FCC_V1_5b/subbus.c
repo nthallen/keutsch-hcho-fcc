@@ -1,6 +1,13 @@
 #include "subbus.h"
 #include "control.h"
 
+static uint16_t fail_reg = 0;
+
+/************************************************************************/
+/* Interrupt Handling                                                   */
+/************************************************************************/
+#if SUBBUS_INTERRUPTS
+
 typedef struct {
   uint16_t address;
   uint16_t bitmask;
@@ -18,10 +25,7 @@ typedef struct {
 
 static interrupt_t interrupts[N_INTERRUPTS];
 
-static uint16_t fail_reg = 0;
 volatile uint8_t subbus_intr_req = 0;
-
-void subbus_reset(void) {}
 
 void init_interrupts(void) {
   int i;
@@ -81,13 +85,63 @@ void intr_service(void) {
     }
   } else SendErrorMsg("11"); // No ack on INTA
 }
+#endif
+
+/************************************************************************/
+/* Subbus Cache Functions                                               */
+/************************************************************************/
+static uint16_t subbus_cache[SUBBUS_CACHE_SIZE];
+int subbus_cache_write(uint16_t addr, uint16_t data) {
+  uint16_t offset = addr - SUBBUS_CACHE_BASE_ADDR;
+  if (addr >= SUBBUS_CACHE_BASE_ADDR && offset < SUBBUS_CACHE_SIZE) {
+    subbus_cache[offset] = data;
+    return 1;
+  }
+  return 0;
+}
+
+int subbus_cache_read(uint16_t addr, uint16_t *data) {
+  uint16_t offset = addr - SUBBUS_CACHE_BASE_ADDR;
+  if (addr >= SUBBUS_CACHE_BASE_ADDR && offset < SUBBUS_CACHE_SIZE) {
+    *data = subbus_cache[offset];
+    return 1;
+  }
+  return 0;
+}
+
+void subbus_reset(void) {
+  int i;
+  for (i = 0; i < SUBBUS_CACHE_SIZE; ++i) {
+    subbus_cache[i] = 0;
+  }
+}
 
 /**
  * @return non-zero if EXPACK is detected.
  */
 int subbus_read( uint16_t addr, uint16_t *rv ) {
-  int expack = 1;
-  return expack;
+  if (addr >= SUBBUS_CACHE_BASE_ADDR) {
+    return subbus_cache_read(addr, rv);
+  }
+  switch (addr) {
+    case 0:
+    case SUBBUS_INTA_ADDR:
+      return 0;
+    case SUBBUS_BDID_ADDR:
+      *rv = SUBBUS_BOARD_ID;
+      return 1;
+    case SUBBUS_BDID_ADDR+1:
+      *rv = SUBBUS_BUILD_NUM;
+      return 1;
+    case SUBBUS_FAIL_ADDR:
+      *rv = fail_reg;
+      return 1;
+    case SUBBUS_SWITCHES_ADDR:
+      *rv = 0;
+      return 1;
+    default:
+      return 0;
+  }
 }
 
 int subbus_write( uint16_t addr, uint16_t data) {

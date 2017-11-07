@@ -236,7 +236,9 @@ static void parse_command(uint8_t *cmd) {
       break;
     case 'B':
       subbus_reset();
+#if SUBBUS_INTERRUPTS
       init_interrupts();
+#endif
       SendMsg("B");
       break;
     case 'V':                         // Board Rev.
@@ -256,14 +258,20 @@ static void parse_command(uint8_t *cmd) {
       SendMsg("A");
       break;
     case 'i':
+#if SUBBUS_INTERRUPTS
       if ( intr_attach(arg1, arg2))
         SendCodeVal('i', arg1);
-      else SendErrorMsg("4");
+      else
+#endif
+        SendErrorMsg("4");
       break;
     case 'u':
+#if SUBBUS_INTERRUPTS
       if ( intr_detach(arg1) )
         SendCodeVal('u', arg1);
-      else SendErrorMsg("4");
+      else
+#endif
+         SendErrorMsg("4");
       break;
     default:                          // Not a command
       SendErrorMsg("10");       // Should not happen
