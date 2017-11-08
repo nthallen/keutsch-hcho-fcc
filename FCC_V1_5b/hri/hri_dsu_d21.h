@@ -192,7 +192,6 @@ static inline hri_dsu_did_reg_t hri_dsu_read_DID_reg(const void *const hw)
 	return ((Dsu *)hw)->DID.reg;
 }
 
-#ifdef USE_DSU_FUNCTIONS
 static inline bool hri_dsu_get_ENTRY_EPRES_bit(const void *const hw)
 {
 	return (((Dsu *)hw)->ENTRY.reg & DSU_ENTRY_EPRES) >> DSU_ENTRY_EPRES_Pos;
@@ -238,7 +237,7 @@ static inline hri_dsu_entry1_reg_t hri_dsu_read_ENTRY1_reg(const void *const hw)
 {
 	return ((Dsu *)hw)->ENTRY1.reg;
 }
-#endif
+
 static inline hri_dsu_end_reg_t hri_dsu_get_END_END_bf(const void *const hw, hri_dsu_end_reg_t mask)
 {
 	return (((Dsu *)hw)->END.reg & DSU_END_END(mask)) >> DSU_END_END_Pos;
