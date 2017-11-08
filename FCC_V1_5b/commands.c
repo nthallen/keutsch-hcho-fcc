@@ -46,6 +46,6 @@ void commands_init(void) {
   gpio_set_pin_function(OPEN3, GPIO_PIN_FUNCTION_OFF);
 
   gpio_set_pin_direction(LED, GPIO_DIRECTION_OUT);
-  gpio_set_pin_level(LED, false);
+  gpio_set_pin_level(LED, true);
   gpio_set_pin_function(LED, GPIO_PIN_FUNCTION_OFF);
 }
