@@ -26,6 +26,9 @@ int subbus_write( uint16_t addr, uint16_t data);
 void set_fail(uint16_t arg);
 void set_fail_reserved(uint16_t arg);
 int subbus_cache_write(uint16_t addr, uint16_t data);
+int subbus_cache_update(uint16_t addr, uint16_t data);
 int subbus_cache_read(uint16_t addr, uint16_t *data);
+int subbus_cache_config(uint16_t addr, uint8_t writable);
+uint8_t subbus_cache_iswritten(uint16_t addr, uint16_t *value);
 
 #endif

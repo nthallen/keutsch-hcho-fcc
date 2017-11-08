@@ -91,18 +91,64 @@ void intr_service(void) {
 /* Subbus Cache Functions                                               */
 /************************************************************************/
 static uint16_t subbus_cache[SUBBUS_CACHE_SIZE];
-int subbus_cache_write(uint16_t addr, uint16_t data) {
-  uint16_t offset = addr - SUBBUS_CACHE_BASE_ADDR;
-  if (addr >= SUBBUS_CACHE_BASE_ADDR && offset < SUBBUS_CACHE_SIZE) {
+static uint16_t subbus_cache_wvalue[SUBBUS_CACHE_SIZE];
+static uint8_t subbus_cache_writable[SUBBUS_CACHE_SIZE];
+static uint8_t subbus_cache_written[SUBBUS_CACHE_SIZE];
+
+static inline uint8_t is_cache_addr(uint16_t addr, uint16_t *offset) {
+  if (addr > SUBBUS_CACHE_BASE_ADDR) {
+    *offset = addr-SUBBUS_CACHE_BASE_ADDR;
+    return *offset < SUBBUS_CACHE_SIZE;
+  }
+  return 0;
+}
+
+/**
+ * @param addr Subbus address
+ * @param writable Indicate whether address is writable
+ * @return non-zero on success
+ */
+int subbus_cache_config(uint16_t addr, uint8_t writable) {
+  uint16_t offset;
+  if (is_cache_addr(addr, &offset)) {
+    subbus_cache_writable[offset] = writable;
+    return 1;
+  }
+  return 0;
+}
+
+uint8_t subbus_cache_iswritten(uint16_t addr, uint16_t *value) {
+  uint16_t offset;
+  if (is_cache_addr(addr, &offset) && subbus_cache_written[offset]) {
+    *value = subbus_cache_wvalue[offset];
+    subbus_cache_written[offset] = 0;
+    return 1;
+  }
+  return 0;
+}
+
+int subbus_cache_update(uint16_t addr, uint16_t data) {
+  uint16_t offset;
+  if (is_cache_addr(addr, &offset)) {
     subbus_cache[offset] = data;
     return 1;
   }
   return 0;
 }
 
+int subbus_cache_write(uint16_t addr, uint16_t data) {
+  uint16_t offset;
+  if (is_cache_addr(addr, &offset) && subbus_cache_writable[offset]) {
+    subbus_cache_wvalue[offset] = data;
+    subbus_cache_written[offset] = 1;
+    return 1;
+  }
+  return 0;
+}
+
 int subbus_cache_read(uint16_t addr, uint16_t *data) {
-  uint16_t offset = addr - SUBBUS_CACHE_BASE_ADDR;
-  if (addr >= SUBBUS_CACHE_BASE_ADDR && offset < SUBBUS_CACHE_SIZE) {
+  uint16_t offset;
+  if (is_cache_addr(addr, &offset)) {
     *data = subbus_cache[offset];
     return 1;
   }
@@ -113,6 +159,9 @@ void subbus_reset(void) {
   int i;
   for (i = 0; i < SUBBUS_CACHE_SIZE; ++i) {
     subbus_cache[i] = 0;
+    subbus_cache_wvalue[i] = 0;
+    subbus_cache_writable[i] = 0;
+    subbus_cache_written[i] = 0;
   }
 }
 
@@ -145,8 +194,11 @@ int subbus_read( uint16_t addr, uint16_t *rv ) {
 }
 
 int subbus_write( uint16_t addr, uint16_t data) {
-  int expack = 1;
-  return expack;
+  uint16_t offset;
+  if (is_cache_addr(addr, &offset)) {
+    return subbus_cache_write(addr, data);
+  }
+  return 0;
 }
 
 void set_fail(uint16_t arg) {
