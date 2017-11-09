@@ -92,15 +92,18 @@ void intr_service(void) {
 /************************************************************************/
 static uint16_t subbus_cache[SUBBUS_CACHE_SIZE];
 static uint16_t subbus_cache_wvalue[SUBBUS_CACHE_SIZE];
-static uint8_t subbus_cache_writable[SUBBUS_CACHE_SIZE];
-static uint8_t subbus_cache_written[SUBBUS_CACHE_SIZE];
+static bool subbus_cache_writable[SUBBUS_CACHE_SIZE];
+static bool subbus_cache_written[SUBBUS_CACHE_SIZE];
 
-static inline uint8_t is_cache_addr(uint16_t addr, uint16_t *offset) {
-  if (addr > SUBBUS_CACHE_BASE_ADDR) {
-    *offset = addr-SUBBUS_CACHE_BASE_ADDR;
-    return *offset < SUBBUS_CACHE_SIZE;
+static bool is_cache_addr(uint16_t addr, uint16_t *offset) {
+  bool rv = false;
+  if (addr >= SUBBUS_CACHE_BASE_ADDR) {
+    if (addr < SUBBUS_CACHE_BASE_ADDR + SUBBUS_CACHE_SIZE) {
+      *offset = addr-SUBBUS_CACHE_BASE_ADDR;
+      rv = true;
+    }
   }
-  return 0;
+  return rv;
 }
 
 /**
@@ -108,25 +111,44 @@ static inline uint8_t is_cache_addr(uint16_t addr, uint16_t *offset) {
  * @param writable Indicate whether address is writable
  * @return non-zero on success
  */
-int subbus_cache_config(uint16_t addr, uint8_t writable) {
+bool subbus_cache_config(uint16_t addr, bool writable) {
   uint16_t offset;
   if (is_cache_addr(addr, &offset)) {
     subbus_cache_writable[offset] = writable;
-    return 1;
+    return true;
   }
-  return 0;
+  return false;
 }
 
-uint8_t subbus_cache_iswritten(uint16_t addr, uint16_t *value) {
+/**
+ * If a value has been written to the specified address since the
+ * last call to this function, the new value is written at the
+ * value address.
+ * @param addr The cache address
+ * @param value Pointer where value may be written
+ * @return true if a value has been written to this address.
+ */
+bool subbus_cache_iswritten(uint16_t addr, uint16_t *value) {
   uint16_t offset;
   if (is_cache_addr(addr, &offset) && subbus_cache_written[offset]) {
     *value = subbus_cache_wvalue[offset];
     subbus_cache_written[offset] = 0;
-    return 1;
+    return true;
   }
-  return 0;
+  return false;
 }
 
+/**
+ * This function differs from subbus_cache_write() in that it directly
+ * updates the cache value. subbus_cache_write() is specifically for
+ * write originating from the control port. subbus_cache_update() is
+ * used by internal functions for storing data acquired from
+ * peripherals, or for storing values written from the control
+ * port after verifying them.
+ * @param addr The cache address
+ * @param data The value to be written
+ * @return true on success
+ */
 int subbus_cache_update(uint16_t addr, uint16_t data) {
   uint16_t offset;
   if (is_cache_addr(addr, &offset)) {

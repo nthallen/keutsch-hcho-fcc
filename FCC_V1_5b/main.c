@@ -9,13 +9,14 @@ int main(void)
 {
 	/* Initializes MCU, drivers and middleware */
 	atmel_start_init();
+  subbus_reset();
 	uart_init();
   spi_init();
   commands_init();
-  subbus_reset();
 	while (1) {
     poll_control();
     poll_spi();
+    poll_commands();
 #if SUBBUS_INTERRUPTS
     if (subbus_intr_req)
       intr_service();

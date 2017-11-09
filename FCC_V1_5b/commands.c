@@ -1,4 +1,6 @@
 #include "commands.h"
+#include "subbus.h"
+#include "spi.h"
 
 void commands_init(void) {
   gpio_set_pin_direction(ADR0, GPIO_DIRECTION_IN);
@@ -48,4 +50,17 @@ void commands_init(void) {
   gpio_set_pin_direction(LED, GPIO_DIRECTION_OUT);
   gpio_set_pin_level(LED, true);
   gpio_set_pin_function(LED, GPIO_PIN_FUNCTION_OFF);
+
+  subbus_cache_config(SUBBUS_ADDR_CMDS, true);
+}
+
+void poll_commands(void) {
+  uint16_t cmd;
+  if (subbus_cache_iswritten(SUBBUS_ADDR_CMDS, &cmd)) {
+    switch (cmd) {
+      case 32: spi_enable(true); break;
+      case 33: spi_enable(false); break;
+      default: break;
+    }
+  }
 }

@@ -11,8 +11,13 @@
 #include "subbus.h"
 
 static struct spi_m_async_descriptor SPI_ADC;
-static volatile bool SPI_ADC_txfr_complete = false;
+static volatile bool SPI_ADC_txfr_complete = true;
 static struct io_descriptor *SPI_ADC_io;
+static bool spi_enabled = false;
+
+void spi_enable(bool value) {
+  spi_enabled = value;
+}
 
 static inline void chip_select(uint8_t pin) {
   gpio_set_pin_level(pin, false);
@@ -61,20 +66,19 @@ static void complete_cb_SPI_ADC(const struct spi_m_async_descriptor *const io_de
   SPI_ADC_txfr_complete = true;
 }
 
-static uint16_t spi_read_data;
-static uint16_t spi_write_data;
+static uint8_t spi_read_data[MAX_SPI_READ_LENGTH];
 
-static void start_spi_transfer(uint8_t pin, uint16_t value) {
+static void start_spi_transfer(uint8_t pin, uint8_t const *txbuf, int length) {
+  assert(length <= MAX_SPI_READ_LENGTH,__FILE__,__LINE__);
   chip_select(pin);
-  spi_write_data = value;
   SPI_ADC_txfr_complete = false;
-  spi_m_async_transfer(&SPI_ADC, (uint8_t const *)&spi_write_data,
-        (uint8_t *const)&spi_read_data, 2);
+  spi_m_async_transfer(&SPI_ADC, txbuf, spi_read_data, length);
 }
 
-#define CONVERT_AIN0 0x818Du
-#define CONVERT_AIN2 0xD18Du
-#define CONVERT_TEMP 0x819Du
+/* The bytes need to be swapped on output, since the driver transmits LSB first */
+static uint8_t CONVERT_AIN0[2] = { 0x81, 0x8D };
+static uint8_t CONVERT_AIN2[2] = { 0xD1, 0x8D };
+static uint8_t CONVERT_TEMP[2] = { 0x81, 0x9D };
 #define MISO PA07
 
 enum adc_state_t {adc_init, adc_init_tx,
@@ -92,64 +96,70 @@ typedef struct {
 static adc_poll_def adc_u2 = {adc_init, CS0, 0x10, 0x11, 0x19};
 static adc_poll_def adc_u3 = {adc_init, CS1, 0x12, 0x13, 0x1A};
 
-/************************************************************************/
-/* poll_adc() is only called when SPI_ADC_txfr_complete is non-zero     */
-/************************************************************************/
-static void poll_adc(adc_poll_def *adc) {
+/**
+ * poll_adc() is only called when SPI_ADC_txfr_complete is non-zero 
+ * @return true if we are relinquishing the SPI bus
+ */
+static bool poll_adc(adc_poll_def *adc) {
+  uint16_t value;
   switch (adc->state) {
     case adc_init:
-      start_spi_transfer(adc->cs_pin, CONVERT_AIN0);
+      start_spi_transfer(adc->cs_pin, CONVERT_AIN0, 2);
       adc->state = adc_init_tx;
-      break;
+      return false;
     case adc_init_tx:
       chip_deselect(adc->cs_pin);
       adc->state = adc_ain0_wait;
-      break;
+      return true;
     case adc_ain0_wait:
       chip_select(adc->cs_pin);
       if (gpio_get_pin_level(MISO)) {
         chip_deselect(adc->cs_pin);
-        return;
+        return true;
       }
-      start_spi_transfer(adc->cs_pin, CONVERT_AIN2);
+      start_spi_transfer(adc->cs_pin, CONVERT_AIN2, 2);
       adc->state = adc_ain0_tx;
-      break;
+      return false;
     case adc_ain0_tx:
       chip_deselect(adc->cs_pin);
-      subbus_cache_update(adc->AIN0_addr, spi_read_data);
+      value = (spi_read_data[0] << 8) + spi_read_data[1];
+      subbus_cache_update(adc->AIN0_addr, value);
       adc->state = adc_ain2_wait;
-      break;
+      return true;
     case adc_ain2_wait:
       chip_select(adc->cs_pin);
       if (gpio_get_pin_level(MISO)) {
         chip_deselect(adc->cs_pin);
-        return;
+        return true;
       }
-      start_spi_transfer(adc->cs_pin, CONVERT_TEMP);
+      start_spi_transfer(adc->cs_pin, CONVERT_TEMP, 2);
       adc->state = adc_ain2_tx;
-      break;
+      return false;
     case adc_ain2_tx:
       chip_deselect(adc->cs_pin);
-      subbus_cache_update(adc->AIN2_addr, spi_read_data);
+      value = (spi_read_data[0] << 8) + spi_read_data[1];
+      subbus_cache_update(adc->AIN2_addr, value);
       adc->state = adc_temp_wait;
-      break;
+      return true;
     case adc_temp_wait:
       chip_select(adc->cs_pin);
       if (gpio_get_pin_level(MISO)) {
         chip_deselect(adc->cs_pin);
-        return;
+        return true;
       }
-      start_spi_transfer(adc->cs_pin, CONVERT_AIN0);
+      start_spi_transfer(adc->cs_pin, CONVERT_AIN0, 2);
       adc->state = adc_temp_tx;
-      break;
+      return false;
     case adc_temp_tx:
       chip_deselect(adc->cs_pin);
-      subbus_cache_update(adc->TEMP_addr, spi_read_data);
+      value = (spi_read_data[0] << 8) + spi_read_data[1];
+      subbus_cache_update(adc->TEMP_addr, value);
       adc->state = adc_temp_wait;
-      break;
+      return true;
     default:
       assert(false, __FILE__, __LINE__);
   }
+  return true;
 }
 
 enum dac_state_t {dac_init, dac_tx, dac_idle};
@@ -161,8 +171,8 @@ typedef struct {
 
 static dac_poll_def dac_u5 = {dac_init, DACSYNC, {0x14, 0x15, 0x16, 0x17}};
 
-static void poll_dac(void) {
-
+static bool poll_dac(void) {
+  return true;
 }
 
 enum spi_state_t {spi_adc_u2, spi_adc_u3, spi_dac };
@@ -170,23 +180,21 @@ static enum spi_state_t spi_state = spi_adc_u2;
 
 void poll_spi(void) {
   enum spi_state_t input_state = spi_state;
+  if (!spi_enabled) return;
   while (SPI_ADC_txfr_complete) {
     switch (spi_state) {
       case spi_adc_u2:
-        poll_adc(&adc_u2);
-        if (SPI_ADC_txfr_complete) {
+        if (poll_adc(&adc_u2)) {
           spi_state = spi_adc_u3;
         }
         break;
       case spi_adc_u3:
-        poll_adc(&adc_u3);
-        if (SPI_ADC_txfr_complete) {
+        if (poll_adc(&adc_u3)) {
           spi_state = spi_dac;
         }
         break;
       case spi_dac:
-        poll_dac();
-        if (SPI_ADC_txfr_complete) {
+        if (poll_dac()) {
           spi_state = spi_adc_u2;
         }
         break;

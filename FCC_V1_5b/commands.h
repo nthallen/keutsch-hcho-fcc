@@ -4,5 +4,6 @@
 #include "atmel_start_pins.h"
 
 void commands_init(void);
+void poll_commands(void);
 
 #endif
