@@ -86,6 +86,7 @@ enum adc_state_t {adc_init, adc_init_tx,
            adc_ain2_wait, adc_ain2_tx,
            adc_temp_wait, adc_temp_tx};
 typedef struct {
+  bool enabled;
   enum adc_state_t state;
   uint8_t cs_pin;
   uint16_t AIN0_addr;
@@ -93,8 +94,8 @@ typedef struct {
   uint16_t TEMP_addr;
 } adc_poll_def;
 
-static adc_poll_def adc_u2 = {adc_init, CS0, 0x10, 0x11, 0x19};
-static adc_poll_def adc_u3 = {adc_init, CS1, 0x12, 0x13, 0x1A};
+static adc_poll_def adc_u2 = {true, adc_init, CS0, 0x10, 0x11, 0x19};
+static adc_poll_def adc_u3 = {true, adc_init, CS1, 0x12, 0x13, 0x1A};
 
 /**
  * poll_adc() is only called when SPI_ADC_txfr_complete is non-zero 
@@ -102,6 +103,7 @@ static adc_poll_def adc_u3 = {adc_init, CS1, 0x12, 0x13, 0x1A};
  */
 static bool poll_adc(adc_poll_def *adc) {
   uint16_t value;
+  if (!adc->enabled) return true;
   switch (adc->state) {
     case adc_init:
       start_spi_transfer(adc->cs_pin, CONVERT_AIN0, 2);
@@ -164,14 +166,50 @@ static bool poll_adc(adc_poll_def *adc) {
 
 enum dac_state_t {dac_init, dac_tx, dac_idle};
 typedef struct {
+  bool enabled;
   enum dac_state_t state;
   uint8_t cs_pin;
   uint16_t addr[4];
+  uint16_t current;
 } dac_poll_def;
 
-static dac_poll_def dac_u5 = {dac_init, DACSYNC, {0x14, 0x15, 0x16, 0x17}};
+static dac_poll_def dac_u5 = {true, dac_init, DACSYNC, {0x14, 0x15, 0x16, 0x17}, 0};
+static uint8_t DACREFENABLE[3] = {0x38, 0x00, 0x01};
+static uint8_t DACupdate[3];
 
+/** 
+ * Only called when SPI bus is free
+ * @return true if we have relinquished the bus and cleared our chip select
+ */
 static bool poll_dac(void) {
+  uint16_t value;
+  if (!dac_u5.enabled) return true;
+  switch (dac_u5.state) {
+    case dac_init: // Need to send the internal reference enable signal
+      start_spi_transfer(dac_u5.cs_pin, DACREFENABLE, 3);
+      dac_u5.state = dac_tx;
+      return false;
+    case dac_tx:
+      chip_deselect(dac_u5.cs_pin);
+      dac_u5.state = dac_idle;
+      return true;
+    case dac_idle:
+      if (subbus_cache_iswritten(dac_u5.addr[dac_u5.current], &value)) {
+        DACupdate[0] = 0x18+dac_u5.current;
+        DACupdate[1] = (value>>8) & 0xFF;
+        DACupdate[2] = value & 0xFF;
+        start_spi_transfer(dac_u5.cs_pin, DACupdate, 3);
+        subbus_cache_update(dac_u5.addr[dac_u5.current], value);
+        dac_u5.current = (dac_u5.current + 1) & 0x3;
+        dac_u5.state = dac_tx;
+        return false;
+      } else {
+        dac_u5.current = (dac_u5.current + 1) & 0x3;
+        return true;
+      }
+    default:
+      assert(false,__FILE__,__LINE__);
+  }
   return true;
 }
 
